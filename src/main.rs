@@ -1,3 +1,4 @@
+mod solution_checker;
 use std::env;
 
 /*
@@ -7,12 +8,14 @@ TODO List
  - Add algorithm for checking all possibilities
  - Serve up on webpage
 */
+
 mod squardle_solver {
 
     use std::collections::HashMap;
     use std::{fs, io};
     use rand::Rng;
     use colored::Colorize;
+    use crate::solution_checker;
 
     pub fn start() {
         let words_list_filename: String = String::from("./src/words-list");
@@ -200,8 +203,8 @@ mod squardle_solver {
 
 
                 // Add solution letters to map
-                check_for_solution(&mut solution, &row_result_vec, &solver_guess_string, true, current_column_row_idx);
-                check_for_solution(&mut solution, &col_result_vec, &solver_guess_string, false, current_column_row_idx);
+                solution_checker::check_for_solution(&mut solution, &row_result_vec, &solver_guess_string, true, current_column_row_idx);
+                solution_checker::check_for_solution(&mut solution, &col_result_vec, &solver_guess_string, false, current_column_row_idx);
 
                 println!("== SOLUTION ==");
                 let mut solution_idx = 0;
@@ -294,7 +297,9 @@ mod squardle_solver {
                         }
                     },
                     // YELLOW LETTER
-                    "y" | "y2" | "y3" => {
+                    s if s.starts_with("y") => {
+                        let min_num_yellow_letters: usize = s.trim_start_matches("y").parse::<i32>().unwrap_or(1) as usize;
+
                         if word_and_result_matching_index && word_and_result_parallel {
                             // Current Row or Column
                             if word_list_is_row {
@@ -309,7 +314,7 @@ mod squardle_solver {
                                     }
                                 }
 
-                                if letter_indexes.len() == 0 {
+                                if letter_indexes.len() == 0 || letter_indexes.len() < min_num_yellow_letters {
                                     // get rid of words that do not have the letter
                                     return false;
                                 } else {
@@ -358,7 +363,7 @@ mod squardle_solver {
                                     }
                                 }
 
-                                if letter_indexes.len() == 0 {
+                                if letter_indexes.len() == 0 || letter_indexes.len() < min_num_yellow_letters {
                                     // get rid of words that do not have the letter
                                     return false;
                                 } else {
@@ -396,7 +401,9 @@ mod squardle_solver {
                         }
                     },
                     // RED LETTER
-                    "r" | "r2" | "r3" => {
+                    s if s.starts_with("r") => {
+                        let min_num_red_letters: usize = s.trim_start_matches("r").parse::<i32>().unwrap_or(1) as usize;
+
                         if word_and_result_matching_index && word_and_result_parallel {
                             // Current Row or Column
                             if word_list_is_row {
@@ -418,7 +425,7 @@ mod squardle_solver {
                                     }
                                 }
 
-                                if letter_indexes.len() == 0 {
+                                if letter_indexes.len() == 0 || letter_indexes.len() < min_num_red_letters {
                                     // get rid of words that do not have the letter
                                     return false;
                                 } else {
@@ -478,7 +485,7 @@ mod squardle_solver {
                                     }
                                 }
 
-                                if letter_indexes.len() == 0 {
+                                if letter_indexes.len() == 0 || letter_indexes.len() < min_num_red_letters {
                                     // get rid of words that do not have the letter
                                     return false;
                                 } else {
@@ -529,7 +536,31 @@ mod squardle_solver {
                         }
                     },
                     // ORANGE LETTER
-                    "o" | "o2" | "o3" => {
+                    s if s.starts_with("o") => {
+                        // Pull out the row and column arrows from the string.
+                        // Possible results include:
+                        //  "o", "o12", "o21", "o22", "o31", "o13", "o32", "o23", "o33"
+
+                        let mut row_min_num_orange_letters = 1;
+                        let mut col_min_num_orange_letters = 1;
+                        for (i, c) in s.chars().enumerate() {
+                            if c.is_digit(10) {
+                                if i == 1 {
+                                    row_min_num_orange_letters = c.to_digit(10).unwrap();
+                                } else if i == 2{
+                                    col_min_num_orange_letters = c.to_digit(10).unwrap();
+                                }
+                            }
+                        }
+
+                        // Assign the minimum number of orange letters based on the row or column value found
+                        let mut min_num_orange_letters = col_min_num_orange_letters as usize;
+                        if word_list_is_row {
+                            min_num_orange_letters = row_min_num_orange_letters as usize;
+                        }
+
+                        println!("Found min num orange letters row={}, col={}", row_min_num_orange_letters, col_min_num_orange_letters);
+
                         if word_and_result_matching_index && word_and_result_parallel {
                             // Current Row or Column
                             // Go through each letter for each word in the list. If it has the
@@ -542,13 +573,13 @@ mod squardle_solver {
                                 }
                             }
 
-                            if letter_indexes.len() == 0 {
-                                // get rid of words that do not have the letter
+                            if letter_indexes.len() == 0 || letter_indexes.len() < min_num_orange_letters {
+                                // get rid of words that do not have the letter or don't have enough of the letter
                                 return false;
                             } else {
                                 for i in letter_indexes {
                                     if i == result_index {
-                                        // get rid of words that have the letter in the same index
+                                        // get rid of words that have the letter at the same index
                                         return false;
                                     }
                                 }
@@ -558,11 +589,11 @@ mod squardle_solver {
                             // TODO - Use this to help determine other words
                         } else if !word_and_result_parallel {
                             /* Perpendicular word row and result column
-                                        r          w                   w
-                                w w w w r          r r r r r           w
-                                        r    or    w           or  r r r r r
-                                        r          w                   w
-                                        r          w                   w
+                                        r          r                   r
+                                w w w w r          w w w w w           r
+                                        r    or    r           or  w w w w w
+                                        r          r                   r
+                                        r          r                   r
                              */
                             if word_list_index * 2 == result_index as i8 {
                                 // The orange letter is IN the word row. So we only want to keep words
@@ -574,7 +605,7 @@ mod squardle_solver {
                                     }
                                 }
 
-                                if letter_indexes.len() == 0 {
+                                if letter_indexes.len() == 0 || letter_indexes.len() < min_num_orange_letters {
                                     // get rid of words that do not have the letter
                                     return false;
                                 } else {
@@ -596,42 +627,6 @@ mod squardle_solver {
             }
             return true
         });
-    }
-
-    pub fn check_for_solution(solution: &mut HashMap<i8, Vec<String>>, result: &Vec<String>, word: &String, is_row: bool, word_list_index: i8) {
-        for (result_index, result_char) in result.iter().enumerate() {
-            if result_char.chars().nth(0).unwrap() == 'g' {
-                let mut words_index = word_list_index;
-                if !is_row {
-                    words_index += 3;
-                }
-
-                let words_list: &mut Vec<String> = solution.get_mut(&words_index).unwrap();
-                let letter: String = word.chars().nth(result_index).unwrap().to_string();
-                words_list[result_index] = letter.clone();
-
-                // If the green letter is in a shared cell, add this green solution to the shared row / column
-                if let 0 | 2 | 4 = result_index {
-                    println!("Index is 0 2 or 4: {}", result_index);
-                    let mut words_index = (result_index / 2) as i8;
-                    // If word list we are checking is a row, then we want to get the words for the intersecting column
-                    if is_row {
-                        words_index += 3;
-                    }
-
-                    println!("words_index={}", words_index);
-
-                    let words_list: &mut Vec<String> = solution.get_mut(&words_index).unwrap();
-                    let letter: String = word.chars().nth((result_index) as usize).unwrap().to_string();
-
-                    println!("letter={}, word_list_index={}", letter, word_list_index);
-
-                    words_list[(word_list_index * 2) as usize] = letter.clone();
-
-                    println!("saved={}", words_list[(word_list_index * 2) as usize]);
-                }
-            }
-        }
     }
 
     pub fn verify_result_valid(result: &Vec<String>) -> bool {
@@ -677,16 +672,10 @@ fn main() {
     squardle_solver::start();
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::fs;
     use crate::squardle_solver;
-    // use std::collections::HashMap;
 
     // Green result tests
     #[test]
@@ -800,7 +789,7 @@ mod tests {
         let result_list_is_row: bool = true;
         squardle_solver::remove_invalid_words(&mut word_list, &result, &solver_guess_string, word_list_index,
                                               result_list_index, word_list_is_row, result_list_is_row);
-        assert_eq!(word_list, vec!["crepe".to_string()]);
+        assert_eq!(word_list, vec!["sever".to_string()]);
     }
 
     #[test]
@@ -1169,107 +1158,19 @@ mod tests {
         assert_eq!(word_list, vec!["spend".to_string(), "prize".to_string(), "dirge".to_string()]);
     }
 
-    // Test real life scenarios
-    // #[test]
-    // fn remove_invalid_words_real_life() {
-    //
-    //     let words_list_filename: String = String::from("./src/words-list");
-    //
-    //     let contents = fs::read_to_string(words_list_filename)
-    //         .expect("Should have been able to read the file");
-    //
-    //     // Create a map that stores a vector of strings for each row/column. Each row/column has a
-    //     // unique set of remaining words
-    //     let mut remaining_words: HashMap<i8, Vec<String>> = HashMap::new();
-    //
-    //     // Read the words and assign them to each of the row/column vectors
-    //     let mut words: Vec<String> = Vec::new();
-    //     for word in contents.split_whitespace() {
-    //         words.push(String::from(word));
-    //     }
-    //
-    //     remaining_words.insert(0, words.clone()); // Top Row
-    //     remaining_words.insert(1, words.clone()); // Middle Row
-    //     remaining_words.insert(2, words.clone()); // Bottom Row
-    //     remaining_words.insert(3, words.clone()); // Left Column
-    //     remaining_words.insert(4, words.clone()); // Middle Column
-    //     remaining_words.insert(5, words.clone()); // Right Column
-    //
-    //     let current_column_row_idx: i8 = 0;
-    //     let solver_guess_string: String = "waive".to_string();
-    //     let row_result_vec: Vec<String> = vec!["g".to_string(), "r".to_string(), "r".to_string(), "b".to_string(), "b".to_string()];
-    //     let col_result_vec: Vec<String> = vec!["g".to_string(), "y".to_string(), "g".to_string(), "b".to_string(), "b".to_string()];
-    //
-    //     let indexes: [i8; 3] = [0, 1, 2];
-    //     for n in indexes.iter() {
-    //         // println!("Removing invalid words for row {} and column {}", n, n + 3);
-    //         // This is the current row index so all letters apply for the row
-    //         let row_words: &mut Vec<String> = remaining_words.get_mut(n)
-    //             .expect("Should get words list from remaining words by index");
-    //
-    //         squardle_solver::remove_invalid_words(row_words, &row_result_vec, &solver_guess_string,
-    //                              *n, current_column_row_idx,
-    //                              true, true);
-    //
-    //         squardle_solver::remove_invalid_words(row_words, &col_result_vec, &solver_guess_string,
-    //                              *n, current_column_row_idx,
-    //                              true, false);
-    //
-    //         let col_words: &mut Vec<String> = remaining_words.get_mut(&(n + 3))
-    //             .expect("Should get words list from remaining words by index");
-    //
-    //         squardle_solver::remove_invalid_words(col_words, &col_result_vec, &solver_guess_string,
-    //                              *n, current_column_row_idx,
-    //                              false, false);
-    //
-    //         squardle_solver::remove_invalid_words(col_words, &row_result_vec, &solver_guess_string,
-    //                              *n, current_column_row_idx,
-    //                              false, true);
-    //     }
-    //
-    //
-    //     // assert!(!remaining_words.get(&0).unwrap().contains(&"esker".to_string()));
-    //     // assert!(!remaining_words.get(&1).unwrap().contains(&"imido".to_string()));
-    //     // assert!(!remaining_words.get(&2).unwrap().contains(&"esker".to_string()));
-    //     // assert!(!remaining_words.get(&3).unwrap().contains(&"esker".to_string()));
-    //     assert!(!remaining_words.get(&4).unwrap().contains(&"imago".to_string()));
-    //     // assert!(!remaining_words.get(&5).unwrap().contains(&"esker".to_string()));
-    // }
-    
     #[test]
-    fn check_for_solution_test() {
-        let mut solution: HashMap<i8, Vec<String>> = HashMap::new();
+    fn remove_invalid_words_multiple_orange_current_row() {
+        let mut word_list = vec!["spend".to_string(), "crepe".to_string(), "dirge".to_string(), "silly".to_string()];
+        let result = vec!["o21".to_string(), "x".to_string(), "x".to_string(), "x".to_string(), "x".to_string()];
+        let solver_guess_string = "elope".to_string();
 
-        let solution_vec: Vec<String> = vec![String::new(); 5];
-
-        solution.insert(0, solution_vec.clone()); // Top Row
-        solution.insert(1, solution_vec.clone()); // Middle Row
-        solution.insert(2, solution_vec.clone()); // Bottom Row
-        solution.insert(3, solution_vec.clone()); // Left Column
-        solution.insert(4, solution_vec.clone()); // Middle Column
-        solution.insert(5, solution_vec.clone()); // Right Column
-
-
-        let result = vec!["g".to_string(), "g".to_string(), "g".to_string(), "x".to_string(), "x".to_string()];
-
-        squardle_solver::check_for_solution(&mut solution, &result, &"hello".to_string(), true, 0);
-
-        let row_solution_count = solution.get(&0)
-            .map(|vec| vec.iter().filter(|s| !s.is_empty()).count())
-            .unwrap_or(0);
-
-        let col_solution_count = solution.get(&3)
-            .map(|vec| vec.iter().filter(|s| !s.is_empty()).count())
-            .unwrap_or(0);
-
-        assert_eq!(row_solution_count, 3);
-        assert_eq!(col_solution_count, 1);
-
-        assert_eq!(solution.get(&0).unwrap().get(0).unwrap(), "h");
-        assert_eq!(solution.get(&0).unwrap().get(1).unwrap(), "e");
-        assert_eq!(solution.get(&0).unwrap().get(2).unwrap(), "l");
-        assert_eq!(solution.get(&3).unwrap().get(0).unwrap(), "h");
-        assert_eq!(solution.get(&4).unwrap().get(0).unwrap(), "l");
+        let word_list_index: i8 = 0;
+        let result_list_index: i8 = 0;
+        let word_list_is_row: bool = true;
+        let result_list_is_row: bool = true;
+        squardle_solver::remove_invalid_words(&mut word_list, &result, &solver_guess_string, word_list_index,
+                                              result_list_index, word_list_is_row, result_list_is_row);
+        assert_eq!(word_list, vec!["crepe".to_string()]);
     }
 
     #[test]
@@ -1313,30 +1214,6 @@ mod tests {
             words.push(String::from(word));
         }
 
-
-        // let mut words = vec!["xxxxx".to_string(), "yyyyy".to_string(), "zzzzz".to_string()];
-
-
-        // println!("Words len: {}", words.len());
-        //
-        // let solver_guess_string1 = "rerig".to_string();
-        //
-        // let row_result1 = vec!["b".to_string(), "w".to_string(), "b".to_string(), "g".to_string(), "b".to_string()];
-        //
-        // squardle_solver::remove_invalid_words(&mut words, &row_result1, &solver_guess_string1,
-        //                                       1, 0,
-        //                                       false, true);
-        //
-        // let col_result1 = vec!["b".to_string(), "g".to_string(), "b".to_string(), "y".to_string(), "b".to_string()];
-        //
-        // squardle_solver::remove_invalid_words(&mut words, &col_result1, &solver_guess_string1,
-        //                                       1, 0,
-        //                                       false, false);
-        //
-        // assert!(words.contains(&"stoic".to_string()));
-        //
-        // println!("Words len: {}", words.len());
-
         let solver_guess_string1 = "ohias".to_string();
 
         let row_result1 = vec!["o".to_string(), "b".to_string(), "r".to_string(), "w".to_string(), "o".to_string()];
@@ -1344,12 +1221,6 @@ mod tests {
         squardle_solver::remove_invalid_words(&mut words, &row_result1, &solver_guess_string1,
                                               1, 1,
                                               false, true);
-
-        // let col_result1 = vec!["r".to_string(), "b".to_string(), "r".to_string(), "w".to_string(), "r".to_string()];
-        //
-        // squardle_solver::remove_invalid_words(&mut words, &col_result1, &solver_guess_string1,
-        //                                       1, 1,
-        //                                       false, false);
 
         assert!(words.contains(&"stoic".to_string()));
     }
